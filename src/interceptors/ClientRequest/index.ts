@@ -1,5 +1,6 @@
 import http from 'node:http'
 import https from 'node:https'
+import { syncBuiltinESMExports } from 'node:module'
 import { runInRequestContext } from '#/src/request-context'
 import { patchesRegistry } from '#/src/utils/patches-registry'
 import { forwardHttpEvents } from '#/src/interceptors/http/forward-events'
@@ -35,7 +36,7 @@ export class ClientRequestInterceptor extends Interceptor<HttpRequestEventMap> {
       })
     )
 
-    this.subscriptions.push(
+    const restorePatches = [
       patchesRegistry.applyPatch(http, 'ClientRequest', (ClientRequest) => {
         return new Proxy(ClientRequest, {
           construct(target, args, newTarget) {
@@ -73,6 +74,16 @@ export class ClientRequestInterceptor extends Interceptor<HttpRequestEventMap> {
           }, requestLogger)
         }
       })
-    )
+    ]
+
+    syncBuiltinESMExports()
+
+    this.subscriptions.push(() => {
+      for (const restorePatch of restorePatches.reverse()) {
+        restorePatch()
+      }
+
+      syncBuiltinESMExports()
+    })
   }
 }
